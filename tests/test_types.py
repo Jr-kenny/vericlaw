@@ -15,6 +15,26 @@ def test_verify_request_rejects_unknown_kind():
         assert "kind" in str(e)
 
 
+def test_unwraps_nested_json_in_text_envelope():
+    raw = '{"text": "{\\"kind\\":\\"claim\\",\\"statement\\":\\"x\\",\\"sources\\":[\\"u\\"]}"}'
+    req = VerifyRequest.from_json(raw)
+    assert req.kind == "claim"
+    assert req.fields["statement"] == "x"
+    assert req.fields["sources"] == ["u"]
+
+
+def test_plain_text_envelope_becomes_claim():
+    req = VerifyRequest.from_json('{"text": "is the sky blue"}')
+    assert req.kind == "claim"
+    assert req.fields["statement"] == "is the sky blue"
+
+
+def test_bare_string_becomes_claim():
+    req = VerifyRequest.from_json('"the earth orbits the sun"')
+    assert req.kind == "claim"
+    assert req.fields["statement"] == "the earth orbits the sun"
+
+
 def test_verify_result_to_json_roundtrip():
     att = Attestation(result_hash="0xabc", method="local_llm", signature="0xsig")
     res = VerifyResult(verdict="supported", confidence=0.9, reasoning="because",
