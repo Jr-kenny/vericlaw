@@ -18,27 +18,48 @@ class VeriClawVerifier(gl.Contract):
     @gl.public.write
     def verify(self, kind: str, payload: str) -> str:
         if kind not in VALID:
-            raise Exception("unknown kind: " + str(kind))
+            raise gl.vm.UserError("unknown kind: " + str(kind))
         allowed = VALID[kind]
 
-        def _decide():
-            return self._decide_nondet(kind, payload, allowed)
+        def gen() -> str:
+            if kind == "claim":
+                instr = ("Decide whether the statement is supported by the evidence. "
+                         "The label must be one of: supported, refuted, inconclusive.")
+            else:
+                instr = ("Decide whether the deliverable meets the acceptance criteria. "
+                         "The label must be one of: pass, fail, inconclusive.")
+            prompt = ("You are a strict, impartial verifier. " + instr + "\n"
+                      "Reply on ONE line exactly as: VERDICT=<label>|<one short sentence of reasoning>\n"
+                      "Input: " + payload)
+            out = gl.nondet.exec_prompt(prompt)
+            return _normalize(str(out), allowed)
 
-        label = gl.eq_principle.strict_eq(_decide)
-        return json.dumps({"verdict": label, "method": "genlayer_consensus"})
+        res = gl.eq_principle.prompt_comparative(
+            gen,
+            "Equivalent if the VERDICT label (before the |) matches exactly; "
+            "the reasoning wording after the | may differ.",
+        )
+        raw = res.get() if hasattr(res, "get") else res
+        label, reason = _split_verdict(str(raw), allowed)
+        return json.dumps({"verdict": label, "reasoning": reason,
+                           "method": "genlayer_consensus"})
 
-    def _decide_nondet(self, kind: str, payload: str, allowed) -> str:
-        if kind == "claim":
-            task = ("Decide whether the statement is supported by the evidence. "
-                    "Reply with exactly one word: supported, refuted, or inconclusive.")
-        else:
-            task = ("Decide whether the deliverable meets the acceptance criteria. "
-                    "Reply with exactly one word: pass, fail, or inconclusive.")
-        prompt = ("You are a strict, impartial verifier. " + task + "\n"
-                  "Input: " + payload)
-        out = gl.nondet.exec_prompt(prompt)
-        text = str(out).strip().lower()
-        for label in allowed:
-            if label in text:
-                return label
-        return "inconclusive"
+
+def _normalize(text: str, allowed) -> str:
+    """Coerce an LLM reply into the canonical 'VERDICT=<label>|<reason>' line."""
+    label, reason = _split_verdict(text, allowed)
+    return "VERDICT=" + label + "|" + reason
+
+
+def _split_verdict(text: str, allowed):
+    body = text.split("VERDICT=", 1)[-1].strip()
+    label_part, _, reason = body.partition("|")
+    label = label_part.strip().lower()
+    if label not in allowed:
+        low = text.lower()
+        label = "inconclusive"
+        for cand in allowed:
+            if cand in low:
+                label = cand
+                break
+    return label, reason.strip()
