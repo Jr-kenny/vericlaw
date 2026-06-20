@@ -42,12 +42,40 @@ def build_client() -> AgentClient:
                        os.environ["CROO_SDK_KEY"])
 
 
+class VerifierWithFallback:
+    """GenLayer consensus first; fall back to the local verifier on any failure
+    (timeout, testnet hiccup) so a CROO order never misses its SLA."""
+
+    def __init__(self, primary, fallback):
+        self.primary = primary
+        self.fallback = fallback
+        self.method_name = "genlayer"
+
+    def verify(self, kind, payload):
+        try:
+            v = self.primary.verify(kind, payload)
+            self.method_name = "genlayer"
+            return v
+        except Exception:
+            if self.fallback is None:
+                raise
+            self.method_name = "local_llm"
+            return self.fallback.verify(kind, payload)
+
+
 def make_verifier():
-    """Claude-backed verifier for claim/deliverable. GenLayer is layered on in
-    a later task; for now this is the local_llm path."""
-    from verifier_core.verifiers.local_llm import LocalLLMVerifier
-    from adapters.llm import make_claude_llm
-    return LocalLLMVerifier(llm=make_claude_llm())
+    """GenLayer consensus verifier as primary; Claude as fallback if a key is set.
+    If GenLayer fails and there is no Claude key, the pipeline returns an
+    `inconclusive` verdict rather than hanging the order."""
+    from verifier_core.verifiers.genlayer import GenLayerVerifier
+    from adapters.genlayer_call import make_genlayer_call
+    primary = GenLayerVerifier(call=make_genlayer_call())
+    fallback = None
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        from verifier_core.verifiers.local_llm import LocalLLMVerifier
+        from adapters.llm import make_claude_llm
+        fallback = LocalLLMVerifier(llm=make_claude_llm())
+    return VerifierWithFallback(primary, fallback)
 
 
 def make_search():
