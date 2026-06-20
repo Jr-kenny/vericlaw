@@ -34,16 +34,10 @@ class VeriClawVerifier(gl.Contract):
         else:
             task = ("Decide whether the deliverable meets the acceptance criteria. "
                     "Reply with exactly one word: pass, fail, or inconclusive.")
-        sys_prompt = "You are a strict, impartial verifier. " + task
-        user_prompt = "Input: " + payload
-        res = gl.nondet.exec_prompt(
-            providers=["openai", "anthropic", "google"],
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        text = res.choices[0].message.content.strip().lower()
+        prompt = ("You are a strict, impartial verifier. " + task + "\n"
+                  "Input: " + payload)
+        out = gl.nondet.exec_prompt(prompt)
+        text = str(out).strip().lower()
         for label in allowed:
             if label in text:
                 return label
