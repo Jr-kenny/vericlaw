@@ -14,6 +14,18 @@ def canonical_hash(v: Verdict) -> str:
     return "0x" + hashlib.sha256(payload.encode()).hexdigest()
 
 
+def hash_body(body: dict) -> str:
+    """Canonical hash of an arbitrary result body (for per-service deliverables)."""
+    payload = json.dumps(body, sort_keys=True, separators=(",", ":"))
+    return "0x" + hashlib.sha256(payload.encode()).hexdigest()
+
+
+def sign_hash(result_hash: str, private_key: str) -> str:
+    signed = Account.sign_message(encode_defunct(hexstr=result_hash),
+                                  private_key=private_key)
+    return signed.signature.hex()
+
+
 def build_attestation(v: Verdict, method: str, private_key: str,
                       genlayer_tx: str | None = None,
                       onchain_proof: dict | None = None) -> Attestation:

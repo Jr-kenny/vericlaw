@@ -23,16 +23,30 @@ async def resolve_requirements(client, order_id: str) -> str:
 
 async def handle_paid(client, order_id: str, *, verifier, private_key,
                       search, chain, delivered: set) -> bool:
-    """Run the pipeline and deliver once. Returns False if already delivered."""
+    """Route the paid order to its service and deliver once.
+
+    If the order's service_id matches one of the registered VeriClaw services
+    (Trust / Resolution / Auditor), run that contract; otherwise fall back to the
+    base claim/deliverable/onchain verifier pipeline. Returns False if already
+    delivered."""
+    from adapters.services import resolve_service_key, run_service
     if order_id in delivered:
         return False
     delivered.add(order_id)
-    requirements = await resolve_requirements(client, order_id)
-    result = run_pipeline(requirements, verifier=verifier, private_key=private_key,
-                          search=search, chain=chain)
+    order = await client.get_order(order_id)
+    neg = await client.get_negotiation(order.negotiation_id)
+    requirements = neg.requirements
+
+    service_key = resolve_service_key(getattr(order, "service_id", ""))
+    if service_key:
+        text = run_service(service_key, requirements, private_key)
+    else:
+        result = run_pipeline(requirements, verifier=verifier, private_key=private_key,
+                              search=search, chain=chain)
+        text = result.to_json()
+
     await client.deliver_order(order_id, DeliverOrderRequest(
-        deliverable_type=DeliverableType.TEXT,
-        deliverable_text=result.to_json()))
+        deliverable_type=DeliverableType.TEXT, deliverable_text=text))
     return True
 
 

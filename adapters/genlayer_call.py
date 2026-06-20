@@ -32,6 +32,32 @@ def _parse_cli_output(stdout: str):
     return result_json, tx
 
 
+def call_contract(addr: str, method: str, args: list, timeout: int = 300):
+    """Call any VeriClaw GenLayer contract method and parse its consensus output.
+
+    Returns (label, reason, extras, tx_hash). `extras` are the trailing ' ~~ '
+    fields some contracts append after the reason (e.g. the Trust Oracle's
+    resolved_ca/chain/namesakes). Raises on a transient miss after one retry.
+    """
+    last_err = None
+    for _ in range(2):
+        proc = subprocess.run(
+            ["genlayer", "write", addr, method, "--args", *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        out = proc.stdout + proc.stderr
+        m = _VERDICT_RE.search(out)
+        if m:
+            label = m.group(1).strip().lower()
+            parts = m.group(2).split(" ~~ ")
+            reason = parts[0].strip()
+            extras = [p.strip() for p in parts[1:]]
+            tx_match = _TX_RE.search(out)
+            return label, reason, extras, (tx_match.group(0) if tx_match else "")
+        last_err = RuntimeError("could not parse verdict from CLI output")
+    raise last_err
+
+
 def make_genlayer_call(timeout: int = 300):
     addr = os.environ["GENLAYER_VERIFIER_ADDRESS"]
 
