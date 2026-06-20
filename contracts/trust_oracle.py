@@ -3,7 +3,7 @@
 from genlayer import *
 import json
 
-# chain name -> GoPlus EVM chain id
+# chain name / DEXScreener chainId -> GoPlus EVM chain id
 GOPLUS_CHAIN = {
     "ethereum": "1", "eth": "1", "bsc": "56", "bnb": "56", "base": "8453",
     "arbitrum": "42161", "arb": "42161", "polygon": "137", "matic": "137",
@@ -24,43 +24,87 @@ class TrustOracle(gl.Contract):
         chain = str(chain).strip().lower()
 
         def gen() -> str:
-            evidence = []
-            if chain in ("solana", "sol"):
-                gp = ("https://api.gopluslabs.io/api/v1/solana/token_security"
-                      "?contract_addresses=" + target)
+            is_evm_ca = target.startswith("0x") and len(target) == 42
+            is_sol_ca = (chain in ("solana", "sol") and not is_evm_ca
+                         and 32 <= len(target) <= 44 and target.isalnum())
+
+            ca = ""
+            resolved_chain = chain
+            namesakes = 0
+            search_summary = ""
+
+            if is_evm_ca or is_sol_ca:
+                ca = target
             else:
-                cid = GOPLUS_CHAIN.get(chain, "1")
-                gp = ("https://api.gopluslabs.io/api/v1/token_security/" + cid
-                      + "?contract_addresses=" + target)
-            try:
-                r = gl.nondet.web.get(gp)
-                evidence.append("GOPLUS_SECURITY: " + r.body.decode("utf-8")[:2000])
-            except Exception:
-                pass
-            try:
-                r2 = gl.nondet.web.get(
-                    "https://api.dexscreener.com/latest/dex/tokens/" + target)
-                evidence.append("DEXSCREENER_LIQUIDITY: "
-                                + r2.body.decode("utf-8")[:1500])
-            except Exception:
-                pass
+                # resolve a ticker / name / url to the canonical (most-liquid) token
+                try:
+                    sr = gl.nondet.web.get(
+                        "https://api.dexscreener.com/latest/dex/search?q=" + target)
+                    pairs = json.loads(sr.body.decode("utf-8")).get("pairs", []) or []
+                    best_liq = -1.0
+                    seen = []
+                    for p in pairs:
+                        pcid = str(p.get("chainId", "")).lower()
+                        if chain != "" and chain not in ("any", pcid):
+                            continue
+                        addr = str(p.get("baseToken", {}).get("address", ""))
+                        if addr != "" and addr not in seen:
+                            seen.append(addr)
+                        usd = float(p.get("liquidity", {}).get("usd", 0) or 0)
+                        if usd > best_liq:
+                            best_liq = usd
+                            ca = addr
+                            resolved_chain = pcid
+                    namesakes = len(seen)
+                    search_summary = ("resolved '" + target + "' -> " + ca
+                                      + " on " + resolved_chain + "; "
+                                      + str(namesakes) + " distinct token(s) share this name/query")
+                except Exception:
+                    pass
+
+            evidence = []
+            if search_summary != "":
+                evidence.append("RESOLUTION: " + search_summary)
+            if ca == "":
+                evidence.append("RESOLUTION: could not resolve the target to a token")
+
+            if ca != "":
+                if resolved_chain in ("solana", "sol"):
+                    gp = ("https://api.gopluslabs.io/api/v1/solana/token_security"
+                          "?contract_addresses=" + ca)
+                else:
+                    cid = GOPLUS_CHAIN.get(resolved_chain, "1")
+                    gp = ("https://api.gopluslabs.io/api/v1/token_security/" + cid
+                          + "?contract_addresses=" + ca)
+                try:
+                    r = gl.nondet.web.get(gp)
+                    evidence.append("GOPLUS_SECURITY: " + r.body.decode("utf-8")[:2000])
+                except Exception:
+                    pass
+                try:
+                    r2 = gl.nondet.web.get(
+                        "https://api.dexscreener.com/latest/dex/tokens/" + ca)
+                    evidence.append("DEXSCREENER_LIQUIDITY: "
+                                    + r2.body.decode("utf-8")[:1500])
+                except Exception:
+                    pass
+
             if len(evidence) > 0:
                 bundle = "\n".join(evidence)
             else:
-                bundle = "(no security or liquidity data could be retrieved)"
+                bundle = "(no data could be retrieved)"
 
             prompt = (
-                "You are a strict onchain risk analyst. Using ONLY the security and "
-                "liquidity data below, assess how safe this token/contract is. Weigh: "
-                "honeypot / cannot-sell flags, owner powers (mint, blacklist, "
-                "modifiable tax/fees), proxy/upgradeable risk, whether liquidity is "
-                "real and locked, and holder concentration. If almost no data was "
-                "retrieved, lean toward caution, not safe.\n"
-                "Pick ONE label: safe (no material red flags), caution (minor or "
-                "unclear risks), high_risk (serious red flags), scam (honeypot or "
-                "clear rug indicators).\n"
-                "Reply on ONE line exactly as: VERDICT=<label>|<one or two sentences "
-                "naming the key red and green flags>\n"
+                "You are a strict onchain risk analyst. Using ONLY the data below, "
+                "assess how safe this token is. Weigh: honeypot / cannot-sell, owner "
+                "powers (mint, blacklist, modifiable tax), proxy/upgradeable risk, "
+                "whether liquidity is real and locked, and holder concentration. If "
+                "the target resolved to a token but MANY tokens share the name, warn "
+                "about impersonation. If little or no data was retrieved, lean to "
+                "caution, not safe.\n"
+                "Pick ONE label: safe, caution, high_risk, scam.\n"
+                "Reply on ONE line exactly as: VERDICT=<label>|<one or two sentences: "
+                "which token (address/chain) you judged, and the key red/green flags>\n"
                 "TARGET: " + target + "  CHAIN: " + chain + "\n\nDATA:\n" + bundle + "\n"
             )
             return _normalize(str(gl.nondet.exec_prompt(prompt)))
