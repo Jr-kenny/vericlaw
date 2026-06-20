@@ -64,7 +64,7 @@ class VeriClawVerifier(gl.Contract):
     count: u256
 
     def __init__(self):
-        self.owner = gl.message.sender_account
+        self.owner = gl.message.sender_address
 
     @gl.public.view
     def stats(self) -> dict:
