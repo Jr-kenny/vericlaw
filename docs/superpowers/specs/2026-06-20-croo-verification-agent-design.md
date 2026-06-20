@@ -155,7 +155,28 @@ valid deliverable before the SLA expires.
 - Integration: run the provider against CROO testnet with our requester, assert
   a real settled order and a valid delivery.
 
-## 11. Where it lives
+## 11. Reuse for other hackathons (Casper Agentic Buildathon)
+
+The Casper Agentic Buildathon (DoraHacks, ~$150k, qualification round closes
+2026-07-01) is a possible second home for this work. Casper pays agents through
+x402 micropayments, not CAP, and is WebAssembly-native. So the payment/transport
+layer differs, but the verification engine does not.
+
+Decision: build the verification engine as a standalone, chain-agnostic package
+with a hard boundary, and treat each chain as a thin adapter around it.
+
+- `verifier_core/` - the engine: evidence adapters, the `Verifier` interface
+  (GenLayer + local_llm), attestation. No CROO or Casper imports. Fully tested
+  on its own.
+- `adapters/croo.py` - the CAP provider loop (built now).
+- `adapters/casper_x402.py` - an x402 adapter (later, only if we are ahead of
+  schedule). Not in the CROO build.
+
+Priority: CROO is the anchor and ships first and complete. Casper is a stretch
+bolt-on, not a rewrite. Before submitting to both, confirm each event's rules on
+related/double submissions, and note the earlier Casper deadline (2026-07-01).
+
+## 12. Where it lives
 
 `~/Documents/croo-verify`, its own git repo with its own public GitHub remote.
 Not the reasoning folder.
