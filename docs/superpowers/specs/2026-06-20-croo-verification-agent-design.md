@@ -155,6 +155,45 @@ valid deliverable before the SLA expires.
 - Integration: run the provider against CROO testnet with our requester, assert
   a real settled order and a valid delivery.
 
+## 10b. Redesign (2026-06-20): trust & resolution layer, three services
+
+Feedback after the first live orders: a generic "verify a claim" agent is too
+basic, buyers have to bring their own claim and the value is low. The competitor
+set (trader monitoring, vault intel, market signals) wins by being specific and
+actionable. So VeriClaw becomes a **trust and resolution layer for the agent
+economy**: three sophisticated services on the same proven engine (CROO loop +
+GenLayer consensus + in-consensus fetching + signed attestation). The engine is
+unchanged; each service gathers different evidence and answers a different
+question. Each is its own CROO service (own listing + price) for clear offerings
+and diverse A2A edges.
+
+1. **Onchain Trust Oracle** - "is this token/contract/vault safe and legit?"
+   Input: a target address + chain. The contract fetches, in-consensus,
+   cross-chain security + liquidity data (GoPlus token security, DEXScreener;
+   both free/public and span many EVM chains + Solana), plus EVM RPC reads where
+   useful. Returns a risk verdict (safe / caution / high_risk / scam) with the
+   red/green flags, reasoning, and proof. Coverage: every major EVM chain + Solana
+   from one mostly-shared codebase, `chain` param so more is config not rewrite.
+   Deliberately NOT a per-chain march (long-tail chains left open, not built now).
+   Buyers: trading/DeFi/vault agents that need a trust check before acting.
+
+2. **Outcome Resolution Oracle** - "did this happen / what was the result?"
+   Input: an event (+ optional sources/deadline). Fetches sources, reads chain
+   for onchain-resolvable facts, validators agree on the outcome. Returns
+   yes/no/undetermined (or a value) + reasoning + proof. Buyers: prediction,
+   parametric, betting agents.
+
+3. **A2A Deliverable Auditor** - "does this output meet the spec?"
+   Input: criteria + deliverable (code/research/data/text). Code is checked in a
+   sandbox; research has its cited sources fetched and checked; data gets
+   schema/quality checks. Returns pass/fail + per-criterion breakdown + proof.
+   Buyers: any agent paying another agent (CROO-native trust layer).
+
+Build order: Trust Oracle first (demand x differentiator overlap), then
+Resolution, then Auditor. Each ships whole (own GenLayer contract + CROO service)
+before the next. The existing claim/deliverable/onchain verifier stays as the
+base the Resolution and Auditor services build on.
+
 ## 11. Reuse for other hackathons (Casper Agentic Buildathon)
 
 The Casper Agentic Buildathon (DoraHacks, ~$150k, qualification round closes
