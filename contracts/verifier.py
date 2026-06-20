@@ -16,23 +16,44 @@ class VeriClawVerifier(gl.Contract):
         self.owner = gl.message.sender_address
 
     @gl.public.write
-    def verify(self, kind: str, payload: str) -> str:
+    def verify(self, kind: str, content: str, sources: str) -> str:
         if kind not in VALID:
             raise gl.vm.UserError("unknown kind: " + str(kind))
         allowed = VALID[kind]
+        content = str(content)
+        sources = str(sources)
+        src_urls = [u.strip() for u in sources.split("\n") if u.strip().startswith("http")]
 
         def gen() -> str:
-            if kind == "claim":
-                instr = ("Decide whether the statement is supported by the evidence. "
-                         "The label must be one of: supported, refuted, inconclusive.")
+            evidence = []
+            for u in src_urls[:3]:
+                try:
+                    r = gl.nondet.web.get(u)
+                    if int(getattr(r, "status", 200) or 200) == 200:
+                        evidence.append("SOURCE " + u + ": "
+                                        + r.body.decode("utf-8")[:1200])
+                except Exception:
+                    pass
+            if len(evidence) > 0:
+                bundle = "\n".join(evidence)
             else:
-                instr = ("Decide whether the deliverable meets the acceptance criteria. "
+                bundle = "(no external sources provided)"
+
+            if kind == "claim":
+                instr = ("Decide whether the CLAIM is true. The label must be one of: "
+                         "supported, refuted, inconclusive.")
+            else:
+                instr = ("Decide whether the DELIVERABLE meets its acceptance criteria. "
                          "The label must be one of: pass, fail, inconclusive.")
-            prompt = ("You are a strict, impartial verifier. " + instr + "\n"
-                      "Reply on ONE line exactly as: VERDICT=<label>|<one short sentence of reasoning>\n"
-                      "Input: " + payload)
-            out = gl.nondet.exec_prompt(prompt)
-            return _normalize(str(out), allowed)
+            prompt = (
+                "You are a strict, impartial verifier. " + instr + "\n"
+                "Prefer the EVIDENCE when it is present. If no evidence was retrieved, "
+                "judge from well-established knowledge, and use the inconclusive label "
+                "only when you genuinely cannot decide.\n"
+                "Reply on ONE line exactly as: VERDICT=<label>|<one short sentence of reasoning>\n"
+                "INPUT: " + content + "\n\nEVIDENCE:\n" + bundle + "\n"
+            )
+            return _normalize(str(gl.nondet.exec_prompt(prompt)), allowed)
 
         res = gl.eq_principle.prompt_comparative(
             gen,
@@ -42,11 +63,11 @@ class VeriClawVerifier(gl.Contract):
         raw = res.get() if hasattr(res, "get") else res
         label, reason = _split_verdict(str(raw), allowed)
         return json.dumps({"verdict": label, "reasoning": reason,
-                           "method": "genlayer_consensus"})
+                           "method": "genlayer_consensus",
+                           "sources_used": len(src_urls)})
 
 
 def _normalize(text: str, allowed) -> str:
-    """Coerce an LLM reply into the canonical 'VERDICT=<label>|<reason>' line."""
     label, reason = _split_verdict(text, allowed)
     return "VERDICT=" + label + "|" + reason
 

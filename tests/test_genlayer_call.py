@@ -1,5 +1,5 @@
 import json
-from adapters.genlayer_call import _parse_cli_output, _flatten
+from adapters.genlayer_call import _parse_cli_output
 
 SAMPLE = """- Calling write method verify on contract at 0xFF06...
 Write Transaction Hash:
@@ -25,10 +25,3 @@ def test_parse_raises_when_no_verdict():
         assert False, "should have raised"
     except RuntimeError:
         pass
-
-
-def test_flatten_turns_json_into_plain_text():
-    text = _flatten('{"statement": "the sky is blue", "evidence": ["a", "b"]}')
-    assert not text.startswith("{")
-    assert "statement: the sky is blue" in text
-    assert "evidence:" in text

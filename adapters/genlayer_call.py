@@ -19,16 +19,6 @@ _VERDICT_RE = re.compile(r"VERDICT=([a-zA-Z_]+)\|([^\"]*)\"")
 _TX_RE = re.compile(r"0x[0-9a-fA-F]{64}")
 
 
-def _flatten(payload_json: str) -> str:
-    try:
-        data = json.loads(payload_json)
-    except Exception:
-        return payload_json
-    if not isinstance(data, dict):
-        return str(data)
-    return " | ".join(str(k) + ": " + str(v) for k, v in data.items())
-
-
 def _parse_cli_output(stdout: str):
     m = _VERDICT_RE.search(stdout)
     if not m:
@@ -45,12 +35,11 @@ def _parse_cli_output(stdout: str):
 def make_genlayer_call(timeout: int = 300):
     addr = os.environ["GENLAYER_VERIFIER_ADDRESS"]
 
-    def call(kind: str, payload_json: str):
-        text = _flatten(payload_json)
+    def call(kind: str, content: str, sources: str):
         last_err = None
         for _ in range(2):  # one retry: studionet consensus is occasionally flaky
             proc = subprocess.run(
-                ["genlayer", "write", addr, "verify", "--args", kind, text],
+                ["genlayer", "write", addr, "verify", "--args", kind, content, sources],
                 capture_output=True, text=True, timeout=timeout,
             )
             try:
