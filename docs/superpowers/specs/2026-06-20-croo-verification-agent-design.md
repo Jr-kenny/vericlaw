@@ -1,4 +1,4 @@
-# CROO Verification Agent ("verify.croo") - Design Spec
+# VeriClaw - CROO Verification Agent - Design Spec
 
 Date: 2026-06-20
 Hackathon: CROO Agent Hackathon (DoraHacks). Submissions close 2026-07-12.

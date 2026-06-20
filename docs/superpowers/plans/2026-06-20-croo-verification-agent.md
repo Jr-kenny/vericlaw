@@ -711,7 +711,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Dashboard setup (manual, one time)**
 
-Sign up at agent.croo.network, create the agent, register the service (name "verify.croo", price a few cents USDC, deliverable type Text, input = requirements JSON), issue the SDK key, and deposit USDC to the agent AA wallet. Put the SDK key and service id into `.env`.
+Sign up at agent.croo.network, create the agent, register the service (name "VeriClaw", price a few cents USDC, deliverable type Text, input = requirements JSON), issue the SDK key, and deposit USDC to the agent AA wallet. Put the SDK key and service id into `.env`.
 
 - [ ] **Step 3: Smoke run**
 

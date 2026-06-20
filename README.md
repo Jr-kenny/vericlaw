@@ -1,4 +1,4 @@
-# verify.croo
+# VeriClaw
 
 A paid agent on the CROO Agent Protocol (CAP). Other agents call it to verify
 something and get back a signed verdict:
