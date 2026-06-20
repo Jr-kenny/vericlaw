@@ -107,23 +107,35 @@ class TrustOracle(gl.Contract):
                 "which token (address/chain) you judged, and the key red/green flags>\n"
                 "TARGET: " + target + "  CHAIN: " + chain + "\n\nDATA:\n" + bundle + "\n"
             )
-            return _normalize(str(gl.nondet.exec_prompt(prompt)))
+            v_label, v_reason = _split(str(gl.nondet.exec_prompt(prompt)))
+            return ("VERDICT=" + v_label + "|" + v_reason + " ~~ " + ca
+                    + " ~~ " + resolved_chain + " ~~ " + str(namesakes))
 
         res = gl.eq_principle.prompt_comparative(
             gen,
             "Equivalent if the VERDICT risk label (before the |) matches exactly; "
-            "the specific flags named after the | may differ in wording.",
+            "the reasoning wording and the resolved-token metadata after may differ.",
         )
         raw = res.get() if hasattr(res, "get") else res
-        label, reason = _split(str(raw))
+        label, reason, rca, rchain, ns = _parse_full(str(raw), chain)
         return json.dumps({"verdict": label, "reasoning": reason,
-                           "method": "genlayer_consensus",
+                           "resolved_ca": rca, "resolved_chain": rchain,
+                           "namesakes": ns, "method": "genlayer_consensus",
                            "target": target, "chain": chain})
 
 
-def _normalize(text: str) -> str:
-    label, reason = _split(text)
-    return "VERDICT=" + label + "|" + reason
+def _parse_full(text: str, default_chain: str):
+    parts = text.split(" ~~ ")
+    label, reason = _split(parts[0])
+    rca = parts[1].strip() if len(parts) > 1 else ""
+    rchain = parts[2].strip() if len(parts) > 2 else default_chain
+    ns = 0
+    if len(parts) > 3:
+        try:
+            ns = int(parts[3].strip())
+        except Exception:
+            ns = 0
+    return label, reason, rca, rchain, ns
 
 
 def _split(text: str):
