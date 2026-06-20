@@ -78,14 +78,17 @@ class TrustOracle(gl.Contract):
                           + "?contract_addresses=" + ca)
                 try:
                     r = gl.nondet.web.get(gp)
-                    evidence.append("GOPLUS_SECURITY: " + r.body.decode("utf-8")[:2000])
+                    # keep the full record: holders[], lp_holders[] (lock status),
+                    # owner/creator balances all live here and must not be truncated
+                    evidence.append("GOPLUS_SECURITY: " + r.body.decode("utf-8")[:5000])
                 except Exception:
                     pass
                 try:
                     r2 = gl.nondet.web.get(
                         "https://api.dexscreener.com/latest/dex/tokens/" + ca)
+                    # pairs carry pairCreatedAt (age), liquidity.usd, volume, fdv
                     evidence.append("DEXSCREENER_LIQUIDITY: "
-                                    + r2.body.decode("utf-8")[:1500])
+                                    + r2.body.decode("utf-8")[:3000])
                 except Exception:
                     pass
 
@@ -96,12 +99,16 @@ class TrustOracle(gl.Contract):
 
             prompt = (
                 "You are a strict onchain risk analyst. Using ONLY the data below, "
-                "assess how safe this token is. Weigh: honeypot / cannot-sell, owner "
-                "powers (mint, blacklist, modifiable tax), proxy/upgradeable risk, "
-                "whether liquidity is real and locked, and holder concentration. If "
-                "the target resolved to a token but MANY tokens share the name, warn "
-                "about impersonation. If little or no data was retrieved, lean to "
-                "caution, not safe.\n"
+                "assess how safe this token is. Weigh ALL of: honeypot / cannot-sell "
+                "flags; buy/sell tax; owner powers (mint, blacklist, can-take-back-"
+                "ownership, modifiable tax); proxy/upgradeable; HOLDER CONCENTRATION "
+                "(top holders' percent, owner_balance and creator_balance percent, "
+                "holder_count); LIQUIDITY depth and LP LOCK (lp_holders is_locked and "
+                "percent and the locker tag, how much is locked); and TOKEN/PAIR AGE "
+                "(pairCreatedAt: a very recently created pair is higher risk). If the "
+                "target resolved to a token but MANY tokens share the name, warn about "
+                "impersonation. If little or no data was retrieved, lean to caution, "
+                "not safe.\n"
                 "Pick ONE label: safe, caution, high_risk, scam.\n"
                 "Reply on ONE line exactly as: VERDICT=<label>|<one or two sentences: "
                 "which token (address/chain) you judged, and the key red/green flags>\n"
