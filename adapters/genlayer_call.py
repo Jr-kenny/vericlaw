@@ -74,9 +74,8 @@ def call_contract(addr: str, method: str, args: list, timeout: int = 300):
 
 
 def make_genlayer_call(timeout: int = 300):
-    addr = os.environ["GENLAYER_VERIFIER_ADDRESS"]
-
     def call(kind: str, content: str, sources: str):
+        addr = os.environ["GENLAYER_VERIFIER_ADDRESS"]
         last_err = None
         for _ in range(2):  # one retry: studionet consensus is occasionally flaky
             proc = subprocess.run(
