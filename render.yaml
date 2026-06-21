@@ -1,0 +1,35 @@
+# Render deploy for the VeriClaw provider (free web service + keep-alive ping).
+# Secrets (sync: false) are set in the Render dashboard, never committed.
+services:
+  - type: web
+    name: vericlaw-provider
+    runtime: python
+    plan: free
+    buildCommand: pip install -e .
+    startCommand: python -m adapters.croo
+    envVars:
+      - key: CROO_API_URL
+        value: https://api.croo.network
+      - key: CROO_WS_URL
+        value: wss://api.croo.network/ws
+      - key: GENLAYER_RPC_URL
+        value: https://studio.genlayer.com/api
+      - key: ONCHAIN_RPC_URL
+        value: https://ethereum-rpc.publicnode.com
+      - key: GENLAYER_TRUST_ADDRESS
+        value: "0x52379A5c04671796E2082d70bD8a22eBbBC01A78"
+      - key: GENLAYER_RESOLUTION_ADDRESS
+        value: "0x61d74aAE44b7D324Ce415Dd6B77c4A47E4D9989c"
+      - key: GENLAYER_AUDITOR_ADDRESS
+        value: "0xd6A5c66f1f463A990c6b23c17aA8b1d8c2Ff2394"
+      - key: CROO_TRUST_SERVICE_ID
+        value: "e1bd03d6-a3ea-4f79-8640-3b85bff62ad3"
+      - key: CROO_RESOLUTION_SERVICE_ID
+        value: "976964e7-e787-4bdf-b9d5-22f32778de92"
+      - key: CROO_AUDITOR_SERVICE_ID
+        value: "59773ac5-e9ca-4e47-ac1b-c57c6c0efeb9"
+      # secrets - set these in the Render dashboard:
+      - key: CROO_SDK_KEY
+        sync: false
+      - key: WALLET_PRIVATE_KEY
+        sync: false

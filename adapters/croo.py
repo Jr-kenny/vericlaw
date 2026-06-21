@@ -119,7 +119,34 @@ def make_chain():
     return Chain()
 
 
+async def _start_health_server():
+    """Tiny HTTP endpoint so a free Render web service stays bound to a port and
+    an external keep-alive ping has something to hit. Binds $PORT."""
+    port = int(os.environ.get("PORT", "8080"))
+
+    async def handle(reader, writer):
+        try:
+            await reader.read(1024)
+            body = b'{"status":"ok","agent":"VeriClaw"}'
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                         b"Content-Length: " + str(len(body)).encode()
+                         + b"\r\nConnection: close\r\n\r\n" + body)
+            await writer.drain()
+        except Exception:
+            pass
+        finally:
+            try:
+                writer.close()
+            except Exception:
+                pass
+
+    server = await asyncio.start_server(handle, "0.0.0.0", port)
+    print(f"health endpoint on :{port}")
+    return server
+
+
 async def main():
+    await _start_health_server()
     client = build_client()
     pk = os.environ["WALLET_PRIVATE_KEY"]
     verifier = make_verifier()

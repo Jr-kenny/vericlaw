@@ -32,30 +32,45 @@ def _parse_cli_output(stdout: str):
     return result_json, tx
 
 
-def call_contract(addr: str, method: str, args: list, timeout: int = 300):
-    """Call any VeriClaw GenLayer contract method and parse its consensus output.
+# --- genlayer-py path (used by the live services; runs on a server, no CLI) ---
+_VERDICT_SEG = re.compile(r"VERDICT=([^'\"]+)")
+_glp_client = None
+_glp_account = None
 
-    Returns (label, reason, extras, tx_hash). `extras` are the trailing ' ~~ '
-    fields some contracts append after the reason (e.g. the Trust Oracle's
-    resolved_ca/chain/namesakes). Raises on a transient miss after one retry.
-    """
-    last_err = None
-    for _ in range(2):
-        proc = subprocess.run(
-            ["genlayer", "write", addr, method, "--args", *args],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        out = proc.stdout + proc.stderr
-        m = _VERDICT_RE.search(out)
-        if m:
-            label = m.group(1).strip().lower()
-            parts = m.group(2).split(" ~~ ")
-            reason = parts[0].strip()
-            extras = [p.strip() for p in parts[1:]]
-            tx_match = _TX_RE.search(out)
-            return label, reason, extras, (tx_match.group(0) if tx_match else "")
-        last_err = RuntimeError("could not parse verdict from CLI output")
-    raise last_err
+
+def _glp():
+    """Lazy studionet client + account (a fresh key works; gas is sponsored)."""
+    global _glp_client, _glp_account
+    if _glp_client is None:
+        from genlayer_py import (create_client, create_account,
+                                 generate_private_key, studionet)
+        pk = os.environ.get("GENLAYER_PRIVATE_KEY") or generate_private_key()
+        _glp_account = create_account(pk)
+        _glp_client = create_client(chain=studionet, account=_glp_account)
+    return _glp_client, _glp_account
+
+
+def call_contract(addr: str, method: str, args: list, timeout: int = 300):
+    """Call a VeriClaw GenLayer contract method via genlayer-py and parse the
+    consensus verdict. Returns (label, reason, extras, tx_hash). `extras` are the
+    trailing ' ~~ ' fields some contracts append (Trust Oracle: resolved_ca,
+    resolved_chain, namesakes)."""
+    client, account = _glp()
+    tx = client.write_contract(address=addr, function_name=method,
+                               args=list(args), account=account)
+    receipt = client.wait_for_transaction_receipt(
+        transaction_hash=tx, retries=max(10, timeout // 3), interval=3000)
+    text = str(receipt)
+    m = _VERDICT_SEG.search(text)
+    if not m:
+        raise RuntimeError("could not parse verdict from receipt")
+    label_part, _, rest = m.group(1).partition("|")
+    parts = rest.split(" ~~ ")
+    label = label_part.strip().lower()
+    reason = parts[0].strip()
+    extras = [p.strip() for p in parts[1:]]
+    tx_hash = tx if isinstance(tx, str) else getattr(tx, "hex", lambda: str(tx))()
+    return label, reason, extras, tx_hash
 
 
 def make_genlayer_call(timeout: int = 300):
