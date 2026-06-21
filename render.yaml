@@ -8,6 +8,8 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python -m adapters.croo
     envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
       - key: CROO_API_URL
         value: https://api.croo.network
       - key: CROO_WS_URL
