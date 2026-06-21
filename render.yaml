@@ -5,7 +5,7 @@ services:
     name: vericlaw-provider
     runtime: python
     plan: free
-    buildCommand: pip install -e .
+    buildCommand: pip install -r requirements.txt
     startCommand: python -m adapters.croo
     envVars:
       - key: CROO_API_URL
