@@ -1,0 +1,16 @@
+name: keepalive
+# Pings the Render health endpoint so the free instance never idles out.
+# Runs on GitHub's infrastructure, independent of any local machine.
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes
+  workflow_dispatch:           # allow manual runs
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping VeriClaw provider
+        run: |
+          echo "pinging $(date -u)"
+          curl -fsS -m 30 https://vericlaw-provider.onrender.com/ || echo "ping failed (non-fatal)"
