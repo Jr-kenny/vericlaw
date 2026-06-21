@@ -1,0 +1,6 @@
+croo-sdk
+genlayer-py
+web3>=6
+eth-account>=0.10
+httpx>=0.27
+python-dotenv>=1.0
